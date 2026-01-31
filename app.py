@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 from supabase import create_client, Client
 import edge_tts
 import asyncio
@@ -113,3 +113,4 @@ if st.button("▶️ INICIAR CICLO"):
             mins, segs = divmod(i, 60)
             placeholder.info(f"⏳ Próxima repetição em {mins:02d}:{segs:02d}")
             time.sleep(1)
+
