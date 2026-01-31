@@ -1,0 +1,67 @@
+import streamlit as st
+import edge_tts
+import asyncio
+import base64
+import time
+
+# Configuração da Voz de Portugal
+VOZ_PT_PT = "pt-PT-RaquelNeural"
+
+def set_bg():
+    st.markdown("""
+        <style>
+        .stApp { background-color: #111; color: white; }
+        </style>
+        """, unsafe_allow_html=True)
+
+async def gerar_audio(texto):
+    communicate = edge_tts.Communicate(texto, VOZ_PT_PT, rate="-10%")
+    await communicate.save("web_audio.mp3")
+
+def autoplay_audio(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode()
+        md = f"""
+            <audio autoplay="true">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        st.markdown(md, unsafe_allow_html=True)
+
+# Interface
+st.title("🎙️ Repetidor de Texto PT-PT")
+set_bg()
+
+# Recupera texto salvo na sessão ou inicia vazio
+if 'texto' not in st.session_state:
+    st.session_state.texto = ""
+
+texto_input = st.text_area("Introduza o seu texto (Voz Calma - Portugal):", 
+                          value=st.session_state.texto, height=200)
+
+col1, col2 = st.columns(2)
+iniciar = col1.button("Iniciar Ciclo (20min)")
+parar = col2.button("Parar")
+
+status_placeholder = st.empty()
+
+if iniciar:
+    st.session_state.texto = texto_input
+    status_placeholder.success("Ciclo Ativo! Mantenha esta página aberta.")
+    
+    while True:
+        # 1. Gera e toca o áudio
+        asyncio.run(gerar_audio(texto_input))
+        autoplay_audio("web_audio.mp3")
+        
+        # 2. Contagem decrescente visual
+        for i in range(20 * 60, 0, -1):
+            mins, secs = divmod(i, 60)
+            status_placeholder.info(f"Próxima leitura em: {mins:02d}:{secs:02d}")
+            time.sleep(1)
+            if parar: break
+        
+        if parar:
+            status_placeholder.warning("Repetição interrompida.")
+            break
