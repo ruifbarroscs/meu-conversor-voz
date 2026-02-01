@@ -6,7 +6,7 @@ import base64
 import time
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO DE ACESSO (SECRETS) ---
+# --- 1. CONFIGURAÇÃO DE ACESSO ---
 try:
     url: str = st.secrets["SUPABASE_URL"]
     key: str = st.secrets["SUPABASE_KEY"]
@@ -55,5 +55,67 @@ if st.session_state.user is None:
 
 # --- 4. APP PRINCIPAL ---
 st.sidebar.title("Opções")
-st.sidebar.write(f"Utilizador: {st.session_state.user.
+st.sidebar.write(f"Utilizador: {st.session_state.user.email}")
+if st.sidebar.button("Sair"):
+    st.session_state.user = None
+    st.rerun()
 
+st.title("🎙️ Consola de Voz PT-PT")
+
+with st.expander("📚 Adicionar à Biblioteca"):
+    nome_f = st.text_input("Nome da frase (ex: Promoção Peixaria)")
+    texto_f = st.text_area("O que deve ser dito?")
+    if st.button("Guardar na Base de Dados"):
+        if nome_f and texto_f:
+            try:
+                dados = {"email": st.session_state.user.email, "frase": texto_f, "nome_predefinicao": nome_f}
+                supabase.table("frases_guardadas").insert(dados).execute()
+                st.success("✅ Guardado!")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao guardar: {e}")
+        else:
+            st.warning("Preencha os campos.")
+
+try:
+    res = supabase.table("frases_guardadas").select("*").eq("email", st.session_state.user.email).execute()
+    frases = res.data
+except:
+    frases = []
+
+st.divider()
+
+if frases:
+    col_sel, col_del = st.columns([4, 1])
+    lista_nomes = [f["nome_predefinicao"] for f in frases]
+    escolha = col_sel.selectbox("Escolher frase da biblioteca:", lista_nomes)
+    item_selecionado = next(f for f in frases if f["nome_predefinicao"] == escolha)
+    
+    if col_del.button("🗑️"):
+        try:
+            supabase.table("frases_guardadas").delete().eq("id", item_selecionado["id"]).execute()
+            st.rerun()
+        except:
+            st.error("Erro ao eliminar")
+
+    texto_final = st.text_area("Texto para reprodução (podes editar aqui):", item_selecionado["frase"], height=150)
+else:
+    texto_final = st.text_area("Texto livre:", "Olá!")
+
+col1, col2 = st.columns(2)
+voz_escolhida = col1.selectbox("Voz:", list(VOZES.keys()))
+velocidade = col1.slider("Velocidade:", -50, 50, 0)
+intervalo = col2.number_input("Repetir a cada (minutos):", 1, 1440, 20)
+
+if st.button("▶️ INICIAR REPETIÇÃO"):
+    placeholder = st.empty()
+    while True:
+        agora = datetime.now().strftime('%H:%M:%S')
+        placeholder.warning(f"🔔 A tocar... ({agora})")
+        arquivo = asyncio.run(gerar_audio(texto_final, VOZES[voz_escolhida], velocidade))
+        tocar_audio(arquivo)
+        for i in range(int(intervalo * 60), 0, -1):
+            mins, segs = divmod(i, 60)
+            placeholder.info(f"⏳ Próxima em {mins:02d}:{segs:02d}")
+            time.sleep(1)
