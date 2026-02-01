@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 from supabase import create_client, Client
 import edge_tts
 import asyncio
@@ -56,3 +56,4 @@ if st.session_state.user is None:
 # --- 4. APP PRINCIPAL ---
 st.sidebar.title("Opções")
 st.sidebar.write(f"Utilizador: {st.session_state.user.
+
