@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 from supabase import create_client, Client
 import edge_tts
 import asyncio
@@ -55,70 +55,4 @@ if st.session_state.user is None:
 
 # --- 4. APP PRINCIPAL ---
 st.sidebar.title("Opções")
-st.sidebar.write(f"Utilizador: {st.session_state.user.email}")
-if st.sidebar.button("Sair"):
-    st.session_state.user = None
-    st.rerun()
-
-st.title("🎙️ Consola de Voz PT-PT")
-
-# Secção para guardar novas frases
-with st.expander("📚 Adicionar à Biblioteca"):
-    nome_f = st.text_input("Nome da frase (ex: Promoção Peixaria)")
-    texto_f = st.text_area("O que deve ser dito?")
-    
-    if st.button("Guardar na Base de Dados"):
-        if nome_f and texto_f:
-            try:
-                dados = {
-                    "email": st.session_state.user.email,
-                    "frase": texto_f,
-                    "nome_predefinicao": nome_f
-                }
-                supabase.table("frases_guardadas").insert(dados).execute()
-                st.success("✅ Guardado com sucesso!")
-                time.sleep(1.5)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao guardar: {e}. Verificou o SQL Editor?")
-        else:
-            st.warning("Preencha todos os campos.")
-
-# Carregar frases da biblioteca
-try:
-    res = supabase.table("frases_guardadas").select("*").eq("email", st.session_state.user.email).execute()
-    frases = res.data
-except:
-    frases = []
-
-st.divider()
-
-if frases:
-    lista_nomes = [f["nome_predefinicao"] for f in frases]
-    escolha = st.selectbox("Escolher frase da biblioteca:", lista_nomes)
-    texto_final = next(f["frase"] for f in frases if f["nome_predefinicao"] == escolha)
-    st.info(f"Texto selecionado: {texto_final}")
-else:
-    texto_final = st.text_area("Texto livre:", "Olá! Adicione frases à biblioteca para começar.")
-
-# Configurações de Voz e Ciclo
-col1, col2 = st.columns(2)
-voz_escolhida = col1.selectbox("Voz:", list(VOZES.keys()))
-velocidade = col1.slider("Velocidade:", -50, 50, 0)
-intervalo = col2.number_input("Repetir a cada (minutos):", 1, 1440, 20)
-
-# --- 5. EXECUÇÃO DO CICLO ---
-if st.button("▶️ INICIAR REPETIÇÃO"):
-    placeholder = st.empty()
-    while True:
-        agora = datetime.now().strftime('%H:%M:%S')
-        placeholder.warning(f"🔔 A tocar agora... ({agora})")
-        
-        arquivo = asyncio.run(gerar_audio(texto_final, VOZES[voz_escolhida], velocidade))
-        tocar_audio(arquivo)
-        
-        # Contagem decrescente
-        for i in range(int(intervalo * 60), 0, -1):
-            mins, segs = divmod(i, 60)
-            placeholder.info(f"⏳ Próxima repetição em {mins:02d}:{segs:02d}")
-            time.sleep(1)
+st.sidebar.write(f"Utilizador: {st.session_state.user.
