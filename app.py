@@ -6,16 +6,16 @@ import base64
 import time
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO DE ACESSO ---
+# --- 1. CONFIGURAÇÃO DE ACESSO (SECRETS) ---
 try:
     url: str = st.secrets["SUPABASE_URL"]
     key: str = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(url, key)
-except:
-    st.error("Erro nos Secrets do Streamlit. Verifica as chaves!")
+except Exception as e:
+    st.error(f"Erro nos Secrets: {e}")
     st.stop()
 
-# --- 2. FUNÇÕES DE ÁUDIO (PT-PT) ---
+# --- 2. FUNÇÕES DE ÁUDIO ---
 VOZES = {
     "Raquel (Feminina)": "pt-PT-RaquelNeural",
     "Duarte (Masculino)": "pt-PT-DuarteNeural",
@@ -25,7 +25,7 @@ VOZES = {
 async def gerar_audio(texto, voz, velocidade):
     speed_str = f"{velocidade:+d}%"
     communicate = edge_tts.Communicate(texto, voz, rate=speed_str)
-    filename = f"temp_audio.mp3"
+    filename = "temp_audio.mp3"
     await communicate.save(filename)
     return filename
 
@@ -50,7 +50,7 @@ if st.session_state.user is None:
             st.session_state.user = res.user
             st.rerun()
         except:
-            st.error("Dados incorretos.")
+            st.error("Dados de login incorretos.")
     st.stop()
 
 # --- 4. APP PRINCIPAL ---
@@ -60,57 +60,65 @@ if st.sidebar.button("Sair"):
     st.session_state.user = None
     st.rerun()
 
-st.title("🎙️ Repetidor de Frases PT-PT")
+st.title("🎙️ Consola de Voz PT-PT")
 
 # Secção para guardar novas frases
-with st.expander("➕ Adicionar à Biblioteca"):
-    nome_f = st.text_input("Nome da frase (ex: Aviso 1)")
+with st.expander("📚 Adicionar à Biblioteca"):
+    nome_f = st.text_input("Nome da frase (ex: Promoção Peixaria)")
     texto_f = st.text_area("O que deve ser dito?")
+    
     if st.button("Guardar na Base de Dados"):
-        try:
-            supabase.table("frases_guardadas").insert({
-                "email": st.session_state.user.email,
-                "frase": texto_f,
-                "nome_predefinicao": nome_f
-            }).execute()
-            st.success("Guardado com sucesso!")
-            time.sleep(1)
-            st.rerun()
-        except:
-            st.error("Erro: Já criaste a tabela no SQL Editor do Supabase?")
+        if nome_f and texto_f:
+            try:
+                dados = {
+                    "email": st.session_state.user.email,
+                    "frase": texto_f,
+                    "nome_predefinicao": nome_f
+                }
+                supabase.table("frases_guardadas").insert(dados).execute()
+                st.success("✅ Guardado com sucesso!")
+                time.sleep(1.5)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao guardar: {e}. Verificou o SQL Editor?")
+        else:
+            st.warning("Preencha todos os campos.")
 
-# Carregar frases guardadas
+# Carregar frases da biblioteca
 try:
     res = supabase.table("frases_guardadas").select("*").eq("email", st.session_state.user.email).execute()
     frases = res.data
 except:
     frases = []
 
-# Configurações de Voz
 st.divider()
+
 if frases:
-    escolha = st.selectbox("Escolher frase da biblioteca:", [f["nome_predefinicao"] for f in frases])
+    lista_nomes = [f["nome_predefinicao"] for f in frases]
+    escolha = st.selectbox("Escolher frase da biblioteca:", lista_nomes)
     texto_final = next(f["frase"] for f in frases if f["nome_predefinicao"] == escolha)
     st.info(f"Texto selecionado: {texto_final}")
 else:
-    texto_final = st.text_area("Texto livre:", "Olá, bem-vindo à tua consola de voz.")
+    texto_final = st.text_area("Texto livre:", "Olá! Adicione frases à biblioteca para começar.")
 
+# Configurações de Voz e Ciclo
 col1, col2 = st.columns(2)
 voz_escolhida = col1.selectbox("Voz:", list(VOZES.keys()))
 velocidade = col1.slider("Velocidade:", -50, 50, 0)
 intervalo = col2.number_input("Repetir a cada (minutos):", 1, 1440, 20)
 
-# --- 5. O CICLO DE REPETIÇÃO ---
-if st.button("▶️ INICIAR CICLO"):
+# --- 5. EXECUÇÃO DO CICLO ---
+if st.button("▶️ INICIAR REPETIÇÃO"):
     placeholder = st.empty()
     while True:
-        placeholder.warning(f"🔔 A tocar agora... ({datetime.now().strftime('%H:%M:%S')})")
+        agora = datetime.now().strftime('%H:%M:%S')
+        placeholder.warning(f"🔔 A tocar agora... ({agora})")
+        
         arquivo = asyncio.run(gerar_audio(texto_final, VOZES[voz_escolhida], velocidade))
         tocar_audio(arquivo)
         
-        # Contagem decrescente visual
+        # Contagem decrescente
         for i in range(int(intervalo * 60), 0, -1):
             mins, segs = divmod(i, 60)
             placeholder.info(f"⏳ Próxima repetição em {mins:02d}:{segs:02d}")
             time.sleep(1)
-
