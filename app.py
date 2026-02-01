@@ -16,7 +16,11 @@ except Exception as e:
     st.stop()
 
 # --- 2. FUNÇÕES DE ÁUDIO ---
-VOZES = {"Raquel (Feminina)": "pt-PT-RaquelNeural", "Duarte (Masculino)": "pt-PT-DuarteNeural", "Fernanda (Feminina)": "pt-PT-FernandaNeural"}
+VOZES = {
+    "Raquel (Feminina)": "pt-PT-RaquelNeural",
+    "Duarte (Masculino)": "pt-PT-DuarteNeural",
+    "Fernanda (Feminina)": "pt-PT-FernandaNeural"
+}
 
 async def gerar_audio(texto, voz, velocidade):
     speed_str = f"{velocidade:+d}%"
@@ -39,20 +43,23 @@ if 'user' not in st.session_state:
 if st.session_state.user is None:
     st.title("🔐 Login")
     with st.form("login_form"):
-        email_in = st.text_input("Email")
-        pw_in = st.text_input("Password", type="password")
+        # Autocomplete ajuda o Chrome a identificar os campos para gravar a password
+        email_in = st.text_input("Email", autocomplete="email")
+        pw_in = st.text_input("Password", type="password", autocomplete="current-password")
         if st.form_submit_button("Entrar"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": email_in, "password": pw_in})
                 st.session_state.user = res.user
+                # Limpa cache e força o Streamlit a reconhecer o login à primeira
+                st.cache_data.clear()
                 st.rerun()
-            except:
+            except Exception:
                 st.error("Dados de login incorretos.")
     st.stop()
 
 # --- 4. APP PRINCIPAL ---
 st.sidebar.title("Opções")
-# A LINHA 58 CORRIGIDA AQUI:
+# LINHA CORRIGIDA (Linha 56 nas tuas imagens)
 st.sidebar.write(f"Utilizador: {st.session_state.user.email}")
 
 if st.sidebar.button("Sair"):
@@ -67,17 +74,22 @@ with st.expander("📚 Adicionar à Biblioteca"):
     if st.button("Guardar"):
         if nome_f and texto_f:
             try:
-                supabase.table("frases_guardadas").insert({"email": st.session_state.user.email, "frase": texto_f, "nome_predefinicao": nome_f}).execute()
+                supabase.table("frases_guardadas").insert({
+                    "email": st.session_state.user.email, 
+                    "frase": texto_f, 
+                    "nome_predefinicao": nome_f
+                }).execute()
                 st.success("✅ Guardado!")
                 time.sleep(1)
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao guardar: {e}")
 
+# Carregar frases do utilizador
 try:
     res = supabase.table("frases_guardadas").select("*").eq("email", st.session_state.user.email).execute()
     frases = res.data
-except:
+except Exception:
     frases = []
 
 st.divider()
@@ -87,13 +99,17 @@ if frases:
     lista_nomes = [f["nome_predefinicao"] for f in frases]
     escolha = col_sel.selectbox("Escolher frase:", lista_nomes)
     item = next(f for f in frases if f["nome_predefinicao"] == escolha)
+    
     if col_del.button("🗑️"):
         supabase.table("frases_guardadas").delete().eq("id", item["id"]).execute()
         st.rerun()
+    
+    # Caixa editável com o texto da frase selecionada
     texto_final = st.text_area("Texto para reprodução (editável):", item["frase"], height=150)
 else:
-    texto_final = st.text_area("Texto livre:", "Olá!")
+    texto_final = st.text_area("Texto livre:", "Olá! Adiciona frases à tua biblioteca.")
 
+# Configurações de Voz
 col1, col2 = st.columns(2)
 voz_escolhida = col1.selectbox("Voz:", list(VOZES.keys()))
 velocidade = col1.slider("Velocidade:", -50, 50, 0)
@@ -104,8 +120,12 @@ if st.button("▶️ INICIAR REPETIÇÃO"):
     while True:
         agora = datetime.now().strftime('%H:%M:%S')
         placeholder.warning(f"🔔 A tocar... ({agora})")
+        
+        # Gera e toca o áudio
         arquivo = asyncio.run(gerar_audio(texto_final, VOZES[voz_escolhida], velocidade))
         tocar_audio(arquivo)
+        
+        # Contagem decrescente para o próximo ciclo
         for i in range(int(intervalo * 60), 0, -1):
             mins, segs = divmod(i, 60)
             placeholder.info(f"⏳ Próxima em {mins:02d}:{segs:02d}")
