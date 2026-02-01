@@ -6,7 +6,7 @@ import base64
 import time
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO DE ACESSO (SECRETS) ---
+# --- 1. CONFIGURAÇÃO DE ACESSO ---
 try:
     url: str = st.secrets["SUPABASE_URL"]
     key: str = st.secrets["SUPABASE_KEY"]
@@ -16,11 +16,7 @@ except Exception as e:
     st.stop()
 
 # --- 2. FUNÇÕES DE ÁUDIO ---
-VOZES = {
-    "Raquel (Feminina)": "pt-PT-RaquelNeural",
-    "Duarte (Masculino)": "pt-PT-DuarteNeural",
-    "Fernanda (Feminina)": "pt-PT-FernandaNeural"
-}
+VOZES = {"Raquel (Feminina)": "pt-PT-RaquelNeural", "Duarte (Masculino)": "pt-PT-DuarteNeural", "Fernanda (Feminina)": "pt-PT-FernandaNeural"}
 
 async def gerar_audio(texto, voz, velocidade):
     speed_str = f"{velocidade:+d}%"
@@ -36,22 +32,18 @@ def tocar_audio(file_path):
         md = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
         st.markdown(md, unsafe_allow_html=True)
 
-# --- 3. GESTÃO DE SESSÃO COM LOGIN "MEMORIZÁVEL" ---
+# --- 3. GESTÃO DE SESSÃO ---
 if 'user' not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
     st.title("🔐 Login")
-    
-    # Criamos um formulário real. Isto força o navegador a detetar o login.
     with st.form("login_form"):
-        email_input = st.text_input("Email", autocomplete="email")
-        pw_input = st.text_input("Password", type="password", autocomplete="current-password")
-        submit_button = st.form_submit_button("Entrar")
-        
-        if submit_button:
+        email_in = st.text_input("Email")
+        pw_in = st.text_input("Password", type="password")
+        if st.form_submit_button("Entrar"):
             try:
-                res = supabase.auth.sign_in_with_password({"email": email_input, "password": pw_input})
+                res = supabase.auth.sign_in_with_password({"email": email_in, "password": pw_in})
                 st.session_state.user = res.user
                 st.rerun()
             except:
@@ -60,36 +52,28 @@ if st.session_state.user is None:
 
 # --- 4. APP PRINCIPAL ---
 st.sidebar.title("Opções")
+# A LINHA 58 CORRIGIDA AQUI:
 st.sidebar.write(f"Utilizador: {st.session_state.user.email}")
+
 if st.sidebar.button("Sair"):
     st.session_state.user = None
     st.rerun()
 
 st.title("🎙️ Consola de Voz PT-PT")
 
-# Secção para guardar novas frases
 with st.expander("📚 Adicionar à Biblioteca"):
-    nome_f = st.text_input("Nome da frase (ex: Promoção Peixaria)")
+    nome_f = st.text_input("Nome da frase")
     texto_f = st.text_area("O que deve ser dito?")
-    
-    if st.button("Guardar na Base de Dados"):
+    if st.button("Guardar"):
         if nome_f and texto_f:
             try:
-                dados = {
-                    "email": st.session_state.user.email,
-                    "frase": texto_f,
-                    "nome_predefinicao": nome_f
-                }
-                supabase.table("frases_guardadas").insert(dados).execute()
-                st.success("✅ Guardado com sucesso!")
-                time.sleep(1.5)
+                supabase.table("frases_guardadas").insert({"email": st.session_state.user.email, "frase": texto_f, "nome_predefinicao": nome_f}).execute()
+                st.success("✅ Guardado!")
+                time.sleep(1)
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao guardar: {e}")
-        else:
-            st.warning("Preencha todos os campos.")
 
-# Carregar frases da biblioteca
 try:
     res = supabase.table("frases_guardadas").select("*").eq("email", st.session_state.user.email).execute()
     frases = res.data
@@ -101,41 +85,28 @@ st.divider()
 if frases:
     col_sel, col_del = st.columns([4, 1])
     lista_nomes = [f["nome_predefinicao"] for f in frases]
-    escolha = col_sel.selectbox("Escolher frase da biblioteca:", lista_nomes)
-    
-    item_selecionado = next(f for f in frases if f["nome_predefinicao"] == escolha)
-    
+    escolha = col_sel.selectbox("Escolher frase:", lista_nomes)
+    item = next(f for f in frases if f["nome_predefinicao"] == escolha)
     if col_del.button("🗑️"):
-        try:
-            supabase.table("frases_guardadas").delete().eq("id", item_selecionado["id"]).execute()
-            st.success("Eliminado!")
-            time.sleep(1)
-            st.rerun()
-        except Exception as e:
-            st.error(f"Erro ao eliminar: {e}")
-
-    texto_original = item_selecionado["frase"]
-    texto_final = st.text_area("Texto para reprodução (podes editar aqui):", texto_original, height=150)
+        supabase.table("frases_guardadas").delete().eq("id", item["id"]).execute()
+        st.rerun()
+    texto_final = st.text_area("Texto para reprodução (editável):", item["frase"], height=150)
 else:
-    texto_final = st.text_area("Texto livre:", "Olá! Adicione frases à biblioteca para começar.")
+    texto_final = st.text_area("Texto livre:", "Olá!")
 
-# Configurações de Voz e Ciclo
 col1, col2 = st.columns(2)
 voz_escolhida = col1.selectbox("Voz:", list(VOZES.keys()))
 velocidade = col1.slider("Velocidade:", -50, 50, 0)
 intervalo = col2.number_input("Repetir a cada (minutos):", 1, 1440, 20)
 
-# --- 5. EXECUÇÃO DO CICLO ---
 if st.button("▶️ INICIAR REPETIÇÃO"):
     placeholder = st.empty()
     while True:
         agora = datetime.now().strftime('%H:%M:%S')
-        placeholder.warning(f"🔔 A tocar agora... ({agora})")
-        
+        placeholder.warning(f"🔔 A tocar... ({agora})")
         arquivo = asyncio.run(gerar_audio(texto_final, VOZES[voz_escolhida], velocidade))
         tocar_audio(arquivo)
-        
         for i in range(int(intervalo * 60), 0, -1):
             mins, segs = divmod(i, 60)
-            placeholder.info(f"⏳ Próxima repetição em {mins:02d}:{segs:02d}")
+            placeholder.info(f"⏳ Próxima em {mins:02d}:{segs:02d}")
             time.sleep(1)
